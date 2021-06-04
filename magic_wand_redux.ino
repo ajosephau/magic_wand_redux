@@ -30,6 +30,8 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 // Declare our NeoPixel strip object:
 Adafruit_NeoPixel wand_strip(WAND_LED_COUNT, WAND_LED_PIN, NEO_GRB + NEO_KHZ800);
 
+int SLIDE_SWITCH_PIN = 7;
+
 // Argument 1 = Number of pixels in NeoPixel strip
 // Argument 2 = Arduino pin number (most are valid)
 // Argument 3 = Pixel type flags, add together as needed:
@@ -52,29 +54,36 @@ void setup() {
 
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.show();            // Turn OFF all pixels ASAP
-  strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
+  strip.setBrightness(100); // Set BRIGHTNESS to about 1/5 (max = 255)
 
   wand_strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   wand_strip.show();            // Turn OFF all pixels ASAP
-  wand_strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
+  wand_strip.setBrightness(100); // Set BRIGHTNESS to about 1/5 (max = 255)
+
+  pinMode(SLIDE_SWITCH_PIN, INPUT);
 }
 
 
 // loop() function -- runs repeatedly as long as board is on ---------------
 
 void loop() {
-  // Fill along the length of the strip in various colors...
-  colorWipe(strip.Color(255,   0,   0), 50); // Red
-  colorWipe(strip.Color(  0, 255,   0), 50); // Green
-  colorWipe(strip.Color(  0,   0, 255), 50); // Blue
-
-  // Do a theater marquee effect in various colors...
-  theaterChase(strip.Color(127, 127, 127), 50); // White, half brightness
-  theaterChase(strip.Color(127,   0,   0), 50); // Red, half brightness
-  theaterChase(strip.Color(  0,   0, 127), 50); // Blue, half brightness
-
-  rainbow(10);             // Flowing rainbow cycle along the whole strip
-  theaterChaseRainbow(50); // Rainbow-enhanced theaterChase variant
+  if(digitalRead(SLIDE_SWITCH_PIN)) {
+    // Fill along the length of the strip in various colors...
+    colorWipe(strip.Color(255,   0,   0), 50); // Red
+    colorWipe(strip.Color(  0, 255,   0), 50); // Green
+    colorWipe(strip.Color(  0,   0, 255), 50); // Blue
+  
+    // Do a theater marquee effect in various colors...
+    theaterChase(strip.Color(127, 127, 127), 50); // White, half brightness
+    theaterChase(strip.Color(127,   0,   0), 50); // Red, half brightness
+    theaterChase(strip.Color(  0,   0, 127), 50); // Blue, half brightness
+  
+    rainbow(10);             // Flowing rainbow cycle along the whole strip
+    theaterChaseRainbow(50); // Rainbow-enhanced theaterChase variant
+  }
+  else {
+    rainbow(10);             // Flowing rainbow cycle along the whole strip    
+  }
 }
 
 
