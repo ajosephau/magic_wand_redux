@@ -212,6 +212,7 @@ void blue_to_red(int wait) {
     strip.show(); // Update strip with new contents
 
     for(int i=0; i<wand_strip.numPixels(); i++) { // For each pixel in strip...
+      wand_strip.setPixelColor(i, strip.Color(255-j,   0,   j));         //  Set pixel's color (in RAM)
     }
     wand_strip.show(); // Update strip with new contents
 
