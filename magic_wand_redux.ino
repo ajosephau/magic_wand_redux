@@ -87,20 +87,24 @@ void loop() {
   }
   else {
     if (CircuitPlayground.leftButton()) {
+      // demo mode
+      // rainbow(0);
       blue_to_red(20);
       delay(500);
     }
     if (CircuitPlayground.rightButton()) {
-      Serial.println("");
-      Serial.println("");
+      Serial.println("timestamp,accX,accY,accZ");
       colorWipe(strip.Color(255,   0,   0), 0); // Red
       delay(500);
       colorWipe(strip.Color(255,   255,   0), 0); // Yellow
       delay(500);
       record_time_start = millis();
+      current_time = millis();
       colorWipe(strip.Color(0,   255,   0), 0); // Green
     }
     if(current_time < record_time_start + RECORD_DURATION) {
+      Serial.print(current_time - record_time_start);
+      Serial.print(",");
       Serial.print(CircuitPlayground.motionX());
       Serial.print(",");
       Serial.print(CircuitPlayground.motionY());
