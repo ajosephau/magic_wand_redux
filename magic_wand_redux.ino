@@ -36,9 +36,6 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel wand_strip(WAND_LED_COUNT, WAND_LED_PIN, NEO_GRB + NEO_KHZ800);
 
 CircularBuffer<float,63> accelerometer_buffer; 
-float original_accelerometer_features[] = {
-    0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000
-};
 
 float accelerometer_features[] = {
     0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000
@@ -46,9 +43,16 @@ float accelerometer_features[] = {
 
 unsigned long current_time;
 unsigned long record_time_start;
+unsigned long motion_detected_start;
 const unsigned long WAIT_DURATION = 1000;
 const unsigned long RECORD_DURATION = 1000;
-const unsigned long SAMPLING_WAIT_TIME = 50;
+const unsigned long SAMPLING_WAIT_TIME = 5;
+const unsigned long MOTION_WAIT_DURATION = 2000;
+
+bool found_max = false;
+int found_state = 0;
+float last_max = 0.0;
+String last_label="";
 
 // Argument 1 = Number of pixels in NeoPixel strip
 // Argument 2 = Arduino pin number (most are valid)
@@ -79,6 +83,8 @@ void setup() {
   wand_strip.setBrightness(100); // Set BRIGHTNESS to about 1/5 (max = 255)
 
   CircuitPlayground.begin();
+  Serial.print("found_max = ");
+  Serial.println(found_max);
 }
 
 // loop() function -- runs repeatedly as long as board is on ---------------
@@ -94,82 +100,23 @@ void loop() {
 //    // Do a theater marquee effect in various colors...
 //    theaterChase(strip.Color(127, 127, 127), 50); // White, half brightness
 //    theaterChase(strip.Color(127,   0,   0), 50); // Red, half brightness
-//    theaterChase(strip.Color(  0,   0, 127), 50); // Blue, half brightness
-  
-    rainbow(0);             // Flowing rainbow cycle along the whole strip
-
-    Serial.println("******");
-    Serial.print("Buffer (Size: ");
-    Serial.print(accelerometer_buffer.size());
-    Serial.print(" / ");
-    Serial.print(EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE);
-    Serial.println("):");
-    for (byte i = 0; i < accelerometer_buffer.size() - 1; i++) {
-        Serial.print(accelerometer_buffer[i]);
-        Serial.print(", ");
+//    theaterChase(strip.Color(  0,   0, 127), 50); // Blue, half brightness  
+    update_accelerometer_boffer();
+    
+    if(current_time > motion_detected_start + MOTION_WAIT_DURATION) {
+      process_accelerometer_data();      
+//      reset_accelerometer_boffer();
     }
-    Serial.println();
-    Serial.println("******");
-
-    accelerometer_buffer.push(CircuitPlayground.motionX());
-    accelerometer_buffer.push(CircuitPlayground.motionY());
-    accelerometer_buffer.push(CircuitPlayground.motionZ());
-
-    if(accelerometer_buffer.size() == EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE) {
-      for (byte i = 0; i < accelerometer_buffer.size() - 1; i++) {
-        accelerometer_features[i] = accelerometer_buffer[i];
-      }
+    
+    if (last_label.equals("still")) {
+      colorWipe(strip.Color(0,   0,   0), 0); // Black
     }
-
-    if (sizeof(accelerometer_features) / sizeof(float) != EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE) {
-        ei_printf("The size of your 'accelerometer_features' array is not correct. Expected %lu items, but had %lu\n",
-            EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE, sizeof(accelerometer_features) / sizeof(float));
-        delay(1000);
-        return;
+    if (last_label.equals("left-right")) {
+      rainbow(0);             // Flowing rainbow cycle along the whole strip
     }
-
-    ei_impulse_result_t result = { 0 };
-
-    // the features are stored into flash, and we don't want to load everything into RAM
-    signal_t features_signal;
-    features_signal.total_length = sizeof(accelerometer_features) / sizeof(accelerometer_features[0]);
-    features_signal.get_data = &raw_feature_get_data;
-
-    // invoke the impulse
-    EI_IMPULSE_ERROR res = run_classifier(&features_signal, &result, false /* debug */);
-    ei_printf("run_classifier returned: %d\n", res);
-
-    if (res != 0) return;
-
-    // print the predictions
-    ei_printf("Predictions ");
-    ei_printf("(DSP: %d ms., Classification: %d ms., Anomaly: %d ms.)",
-        result.timing.dsp, result.timing.classification, result.timing.anomaly);
-    ei_printf(": \n");
-    ei_printf("[");
-    for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
-        ei_printf("%.5f", result.classification[ix].value);
-#if EI_CLASSIFIER_HAS_ANOMALY == 1
-        ei_printf(", ");
-#else
-        if (ix != EI_CLASSIFIER_LABEL_COUNT - 1) {
-            ei_printf(", ");
-        }
-#endif
+    if (last_label.equals("up-down")) {
+      blue_to_red(20);
     }
-#if EI_CLASSIFIER_HAS_ANOMALY == 1
-    ei_printf("%.3f", result.anomaly);
-#endif
-    ei_printf("]\n");
-
-    // human-readable predictions
-    for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
-        ei_printf("    %s: %.5f\n", result.classification[ix].label, result.classification[ix].value);
-    }
-#if EI_CLASSIFIER_HAS_ANOMALY == 1
-    ei_printf("    anomaly score: %.3f\n", result.anomaly);
-#endif
-  
   }
   else {
     if (CircuitPlayground.leftButton()) {
@@ -295,6 +242,16 @@ void blue_to_red(int wait) {
   // Color wheel has a range of 65536 but it's OK if we roll over, so
   // just count from 0 to 5*65536. Adding 256 to firstPixelHue each time
   // means we'll make 5*65536/256 = 1280 passes through this outer loop:
+  for(int i=0; i<strip.numPixels(); i++) { // For each pixel in strip...
+    strip.setPixelColor(i, strip.Color(0,   0,   255));
+  }
+  strip.show();
+  for(int i=0; i<wand_strip.numPixels(); i++) { // For each pixel in strip...
+    wand_strip.setPixelColor(i, strip.Color(0,   0,   255));
+  }
+  wand_strip.show();
+  delay(250);
+
   for(int j=255; j > 0; j-=5) {
     for(int i=0; i<strip.numPixels(); i++) { // For each pixel in strip...
       strip.setPixelColor(i, strip.Color(255-j,   0,   j));         //  Set pixel's color (in RAM)
@@ -308,6 +265,8 @@ void blue_to_red(int wait) {
 
     delay(wait);  // Pause for a moment
   }
+  delay(250);
+
 }
 
 
@@ -384,6 +343,135 @@ void theaterChaseRainbow(int wait) {
       firstPixelHue += 65536 / 90; // One cycle of color wheel over 90 frames
     }
   }
+}
+
+/**
+ * @brief      update accelerometer buffer
+ *
+ * @return     0
+ */
+int update_accelerometer_boffer() {
+  Serial.println("******");
+  Serial.print("Buffer (Size: ");
+  Serial.print(accelerometer_buffer.size());
+  Serial.print(" / ");
+  Serial.print(EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE);
+  Serial.println("):");
+  for (byte i = 0; i < accelerometer_buffer.size() - 1; i++) {
+      Serial.print(accelerometer_buffer[i]);
+      Serial.print(", ");
+  }
+  Serial.println();
+  Serial.println("******");
+
+  accelerometer_buffer.push(CircuitPlayground.motionX());
+  accelerometer_buffer.push(CircuitPlayground.motionY());
+  accelerometer_buffer.push(CircuitPlayground.motionZ());
+
+  return 0;
+}
+
+/**
+ * @brief      reset accelerometer buffer
+ *
+ * @return     0
+ */
+int reset_accelerometer_boffer() {
+  Serial.println("******");
+  Serial.print("Buffer (Size: ");
+  Serial.print(accelerometer_buffer.size());
+  Serial.print(" / ");
+  Serial.print(EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE);
+  Serial.println("):");
+  for (byte i = 0; i < accelerometer_buffer.size(); i++) {
+        accelerometer_buffer.push(0.0);
+  }
+
+  return 0;
+}
+
+/**
+ * @brief      process accelerometer data
+ *
+ * @return     0
+ */
+int process_accelerometer_data() {
+  if(accelerometer_buffer.size() == EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE) {
+    for (byte i = 0; i < accelerometer_buffer.size() - 1; i++) {
+      accelerometer_features[i] = accelerometer_buffer[i];
+    }
+  }
+
+  if (sizeof(accelerometer_features) / sizeof(float) != EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE) {
+      ei_printf("The size of your 'accelerometer_features' array is not correct. Expected %lu items, but had %lu\n",
+          EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE, sizeof(accelerometer_features) / sizeof(float));
+      delay(1000);
+      return -1;
+  }
+
+  ei_impulse_result_t result = { 0 };
+
+  // the features are stored into flash, and we don't want to load everything into RAM
+  signal_t features_signal;
+  features_signal.total_length = sizeof(accelerometer_features) / sizeof(accelerometer_features[0]);
+  features_signal.get_data = &raw_feature_get_data;
+
+  // invoke the impulse
+  EI_IMPULSE_ERROR res = run_classifier(&features_signal, &result, false /* debug */);
+  ei_printf("run_classifier returned: %d\n", res);
+
+  if (res != 0) return -1;
+
+  // print the predictions
+  ei_printf("Predictions ");
+  ei_printf("(DSP: %d ms., Classification: %d ms., Anomaly: %d ms.)",
+      result.timing.dsp, result.timing.classification, result.timing.anomaly);
+  ei_printf(": \n");
+  ei_printf("[");
+  last_max = 0.0;
+  found_state = 0;
+  found_max = false;
+  for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
+      ei_printf("%.5f", result.classification[ix].value);
+      if (result.classification[ix].value > last_max) {
+        last_max = result.classification[ix].value;
+        found_state = ix;
+        last_label = result.classification[ix].label;
+        motion_detected_start = millis();
+        found_max = true;
+      }
+#if EI_CLASSIFIER_HAS_ANOMALY == 1
+      ei_printf(", ");
+#else
+      if (ix != EI_CLASSIFIER_LABEL_COUNT - 1) {
+          ei_printf(", ");
+      }
+#endif
+  }
+#if EI_CLASSIFIER_HAS_ANOMALY == 1
+  ei_printf("%.3f", result.anomaly);
+#endif
+  ei_printf("]\n");
+
+  // human-readable predictions
+  for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
+      ei_printf("    %s: %.5f\n", result.classification[ix].label, result.classification[ix].value);
+  }
+#if EI_CLASSIFIER_HAS_ANOMALY == 1
+  ei_printf("    anomaly score: %.3f\n", result.anomaly);
+#endif  
+
+  Serial.print("    Max found: ");
+  Serial.print(found_max);
+  Serial.print(", index=");
+  Serial.print(found_state);
+  Serial.print(", value=");
+  Serial.print(last_max);
+  Serial.print(", label=");
+  Serial.println(last_label);
+  Serial.println();
+  
+  return 0;
 }
 
 
