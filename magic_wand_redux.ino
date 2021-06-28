@@ -15,6 +15,10 @@
  #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
 #endif
 #include <Adafruit_CircuitPlayground.h>
+#include <CircularBuffer.h>
+
+#include <ajoseph-cpb-example_inferencing.h>
+
 
 // Which pin on the Arduino is connected to the NeoPixels?
 // On a Trinket or Gemma we suggest changing this to 1:
@@ -31,8 +35,14 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 // Declare our NeoPixel strip object:
 Adafruit_NeoPixel wand_strip(WAND_LED_COUNT, WAND_LED_PIN, NEO_GRB + NEO_KHZ800);
 
+CircularBuffer<float,63> accelerometer_buffer; 
+float accelerometer_features[] = {
+    0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000
+};
+
 unsigned long current_time;
 unsigned long record_time_start;
+const unsigned long WAIT_DURATION = 1000;
 const unsigned long RECORD_DURATION = 1000;
 
 // Argument 1 = Number of pixels in NeoPixel strip
@@ -66,7 +76,6 @@ void setup() {
   CircuitPlayground.begin();
 }
 
-
 // loop() function -- runs repeatedly as long as board is on ---------------
 
 void loop() {
@@ -83,7 +92,79 @@ void loop() {
 //    theaterChase(strip.Color(  0,   0, 127), 50); // Blue, half brightness
   
     rainbow(0);             // Flowing rainbow cycle along the whole strip
-//    theaterChaseRainbow(50); // Rainbow-enhanced theaterChase variant
+
+    Serial.println("******");
+    Serial.print("Buffer (Size: ");
+    Serial.print(accelerometer_buffer.size());
+    Serial.print(" / ");
+    Serial.print(EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE);
+    Serial.println("):");
+    for (byte i = 0; i < accelerometer_buffer.size() - 1; i++) {
+        Serial.print(accelerometer_buffer[i]);
+        Serial.print(", ");
+    }
+    Serial.println();
+    Serial.println("******");
+
+    accelerometer_buffer.push(CircuitPlayground.motionX());
+    accelerometer_buffer.push(CircuitPlayground.motionY());
+    accelerometer_buffer.push(CircuitPlayground.motionZ());
+
+    if(accelerometer_buffer.size() == EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE) {
+      for (byte i = 0; i < accelerometer_buffer.size() - 1; i++) {
+        accelerometer_features[i] = accelerometer_buffer[i];
+      }
+    }
+
+    if (sizeof(accelerometer_features) / sizeof(float) != EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE) {
+        ei_printf("The size of your 'accelerometer_features' array is not correct. Expected %lu items, but had %lu\n",
+            EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE, sizeof(accelerometer_features) / sizeof(float));
+        delay(1000);
+        return;
+    }
+
+    ei_impulse_result_t result = { 0 };
+
+    // the features are stored into flash, and we don't want to load everything into RAM
+    signal_t features_signal;
+    features_signal.total_length = sizeof(accelerometer_features) / sizeof(accelerometer_features[0]);
+    features_signal.get_data = &raw_feature_get_data;
+
+    // invoke the impulse
+    EI_IMPULSE_ERROR res = run_classifier(&features_signal, &result, false /* debug */);
+    ei_printf("run_classifier returned: %d\n", res);
+
+    if (res != 0) return;
+
+    // print the predictions
+    ei_printf("Predictions ");
+    ei_printf("(DSP: %d ms., Classification: %d ms., Anomaly: %d ms.)",
+        result.timing.dsp, result.timing.classification, result.timing.anomaly);
+    ei_printf(": \n");
+    ei_printf("[");
+    for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
+        ei_printf("%.5f", result.classification[ix].value);
+#if EI_CLASSIFIER_HAS_ANOMALY == 1
+        ei_printf(", ");
+#else
+        if (ix != EI_CLASSIFIER_LABEL_COUNT - 1) {
+            ei_printf(", ");
+        }
+#endif
+    }
+#if EI_CLASSIFIER_HAS_ANOMALY == 1
+    ei_printf("%.3f", result.anomaly);
+#endif
+    ei_printf("]\n");
+
+    // human-readable predictions
+    for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
+        ei_printf("    %s: %.5f\n", result.classification[ix].label, result.classification[ix].value);
+    }
+#if EI_CLASSIFIER_HAS_ANOMALY == 1
+    ei_printf("    anomaly score: %.3f\n", result.anomaly);
+#endif
+  
   }
   else {
     if (CircuitPlayground.leftButton()) {
@@ -95,9 +176,9 @@ void loop() {
     if (CircuitPlayground.rightButton()) {
       Serial.println("timestamp,accX,accY,accZ");
       colorWipe(strip.Color(255,   0,   0), 0); // Red
-      delay(500);
+      delay(WAIT_DURATION);
       colorWipe(strip.Color(255,   255,   0), 0); // Yellow
-      delay(500);
+      delay(WAIT_DURATION);
       record_time_start = millis();
       current_time = millis();
       colorWipe(strip.Color(0,   255,   0), 0); // Green
@@ -298,4 +379,39 @@ void theaterChaseRainbow(int wait) {
       firstPixelHue += 65536 / 90; // One cycle of color wheel over 90 frames
     }
   }
+}
+
+
+/**
+ * @brief      Copy raw feature data in out_ptr
+ *             Function called by inference library
+ *
+ * @param[in]  offset   The offset
+ * @param[in]  length   The length
+ * @param      out_ptr  The out pointer
+ *
+ * @return     0
+ */
+int raw_feature_get_data(size_t offset, size_t length, float *out_ptr) {
+    memcpy(out_ptr, accelerometer_features + offset, length * sizeof(float));
+    return 0;
+}
+
+
+/**
+ * @brief      Printf function uses vsnprintf and output using Arduino Serial
+ *
+ * @param[in]  format     Variable argument list
+ */
+void ei_printf(const char *format, ...) {
+    static char print_buf[1024] = { 0 };
+
+    va_list args;
+    va_start(args, format);
+    int r = vsnprintf(print_buf, sizeof(print_buf), format, args);
+    va_end(args);
+
+    if (r > 0) {
+        Serial.write(print_buf);
+    }
 }
