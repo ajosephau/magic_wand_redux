@@ -36,6 +36,10 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 Adafruit_NeoPixel wand_strip(WAND_LED_COUNT, WAND_LED_PIN, NEO_GRB + NEO_KHZ800);
 
 CircularBuffer<float,63> accelerometer_buffer; 
+float original_accelerometer_features[] = {
+    0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000
+};
+
 float accelerometer_features[] = {
     0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000
 };
@@ -44,6 +48,7 @@ unsigned long current_time;
 unsigned long record_time_start;
 const unsigned long WAIT_DURATION = 1000;
 const unsigned long RECORD_DURATION = 1000;
+const unsigned long SAMPLING_WAIT_TIME = 50;
 
 // Argument 1 = Number of pixels in NeoPixel strip
 // Argument 2 = Arduino pin number (most are valid)
@@ -171,7 +176,7 @@ void loop() {
       // demo mode
       // rainbow(0);
       blue_to_red(20);
-      delay(500);
+      delay(SAMPLING_WAIT_TIME);
     }
     if (CircuitPlayground.rightButton()) {
       Serial.println("timestamp,accX,accY,accZ");
