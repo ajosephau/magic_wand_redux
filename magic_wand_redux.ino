@@ -35,6 +35,7 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 // Declare our NeoPixel strip object:
 Adafruit_NeoPixel wand_strip(WAND_LED_COUNT, WAND_LED_PIN, NEO_GRB + NEO_KHZ800);
 
+const int NUM_SAMPLES = 1000;
 CircularBuffer<float,63> accelerometer_buffer; 
 
 float accelerometer_features[] = {
@@ -44,13 +45,14 @@ float accelerometer_features[] = {
 unsigned long current_time;
 unsigned long record_time_start;
 unsigned long motion_detected_start;
-const unsigned long WAIT_DURATION = 1000;
-const unsigned long RECORD_DURATION = 1000;
+const unsigned long WAIT_DURATION = 500;
+const unsigned long RECORD_DURATION = 2000;
 const unsigned long SAMPLING_WAIT_TIME = 5;
 const unsigned long MOTION_WAIT_DURATION = 2000;
 
 bool found_max = false;
 int found_state = 0;
+int sample_count = 0;
 float last_max = 0.0;
 String last_label="";
 
@@ -126,6 +128,7 @@ void loop() {
       delay(SAMPLING_WAIT_TIME);
     }
     if (CircuitPlayground.rightButton()) {
+      sample_count = 0;
       Serial.println("timestamp,accX,accY,accZ");
       colorWipe(strip.Color(255,   0,   0), 0); // Red
       delay(WAIT_DURATION);
@@ -135,14 +138,15 @@ void loop() {
       current_time = millis();
       colorWipe(strip.Color(0,   255,   0), 0); // Green
     }
-    if(current_time < record_time_start + RECORD_DURATION) {
+    if((current_time < record_time_start + RECORD_DURATION) && (sample_count < NUM_SAMPLES)) {
       Serial.print(current_time - record_time_start);
       Serial.print(",");
       Serial.print(CircuitPlayground.motionX());
       Serial.print(",");
       Serial.print(CircuitPlayground.motionY());
       Serial.print(",");
-      Serial.println(CircuitPlayground.motionZ());
+      Serial.println(CircuitPlayground.motionZ());      
+      sample_count = sample_count + 3;
     }
     else {
       colorWipe(strip.Color(0,   0,   0), 0); // Black
