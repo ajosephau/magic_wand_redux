@@ -1,15 +1,3 @@
-// A basic everyday NeoPixel strip test program.
-
-// NEOPIXEL BEST PRACTICES for most reliable operation:
-// - Add 1000 uF CAPACITOR between NeoPixel strip's + and - connections.
-// - MINIMIZE WIRING LENGTH between microcontroller board and first pixel.
-// - NeoPixel strip's DATA-IN should pass through a 300-500 OHM RESISTOR.
-// - AVOID connecting NeoPixels on a LIVE CIRCUIT. If you must, ALWAYS
-//   connect GROUND (-) first, then +, then data.
-// - When using a 3.3V microcontroller with a 5V-powered NeoPixel strip,
-//   a LOGIC-LEVEL CONVERTER on the data line is STRONGLY RECOMMENDED.
-// (Skipping these may work OK on your workbench but can fail in the field)
-
 #include <Adafruit_NeoPixel.h>
 #ifdef __AVR__
  #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
@@ -38,9 +26,7 @@ Adafruit_NeoPixel wand_strip(WAND_LED_COUNT, WAND_LED_PIN, NEO_GRB + NEO_KHZ800)
 const int NUM_SAMPLES = 1000;
 CircularBuffer<float,63> accelerometer_buffer; 
 
-float accelerometer_features[] = {
-    0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000
-};
+float accelerometer_features[63] = {};
 
 unsigned long current_time;
 unsigned long record_time_start;
@@ -48,7 +34,7 @@ unsigned long motion_detected_start;
 const unsigned long WAIT_DURATION = 500;
 const unsigned long RECORD_DURATION = 2000;
 const unsigned long SAMPLING_WAIT_TIME = 5;
-const unsigned long MOTION_WAIT_DURATION = 2000;
+const unsigned long MOTION_WAIT_DURATION = 500;
 
 bool found_max = false;
 int found_state = 0;
@@ -94,38 +80,30 @@ void setup() {
 void loop() {
   current_time = millis();
   if(CircuitPlayground.slideSwitch()) {
-//    // Fill along the length of the strip in various colors...
-//    colorWipe(strip.Color(255,   0,   0), 50); // Red
-//    colorWipe(strip.Color(  0, 255,   0), 50); // Green
-//    colorWipe(strip.Color(  0,   0, 255), 50); // Blue
-//  
-//    // Do a theater marquee effect in various colors...
-//    theaterChase(strip.Color(127, 127, 127), 50); // White, half brightness
-//    theaterChase(strip.Color(127,   0,   0), 50); // Red, half brightness
-//    theaterChase(strip.Color(  0,   0, 127), 50); // Blue, half brightness  
     update_accelerometer_boffer();
     
     if(current_time > motion_detected_start + MOTION_WAIT_DURATION) {
       process_accelerometer_data();      
-//      reset_accelerometer_boffer();
+      reset_accelerometer_boffer();
     }
     
     if (last_label.equals("still")) {
       colorWipe(strip.Color(0,   0,   0), 0); // Black
     }
-    if (last_label.equals("left-right")) {
-      rainbow(0);             // Flowing rainbow cycle along the whole strip
+    if (last_label.equals("locomotor")) {
+      rainbow(0);
     }
-    if (last_label.equals("up-down")) {
+    if (last_label.equals("incendio")) {
       blue_to_red(20);
+    }
+    if (last_label.equals("alohomora")) {
+      theaterChase(strip.Color(255,   0,   0), 50);
     }
   }
   else {
     if (CircuitPlayground.leftButton()) {
       // demo mode
-      // rainbow(0);
-      blue_to_red(20);
-      delay(SAMPLING_WAIT_TIME);
+      rainbow(0);
     }
     if (CircuitPlayground.rightButton()) {
       sample_count = 0;
@@ -361,12 +339,12 @@ int update_accelerometer_boffer() {
   Serial.print(" / ");
   Serial.print(EI_CLASSIFIER_DSP_INPUT_FRAME_SIZE);
   Serial.println("):");
-  for (byte i = 0; i < accelerometer_buffer.size() - 1; i++) {
-      Serial.print(accelerometer_buffer[i]);
-      Serial.print(", ");
-  }
-  Serial.println();
-  Serial.println("******");
+//  for (byte i = 0; i < accelerometer_buffer.size() - 1; i++) {
+//      Serial.print(accelerometer_buffer[i]);
+//      Serial.print(", ");
+//  }
+//  Serial.println();
+//  Serial.println("******");
 
   accelerometer_buffer.push(CircuitPlayground.motionX());
   accelerometer_buffer.push(CircuitPlayground.motionY());
